@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────
+# Smart Panorama & Object Recognition System — Config
+# ─────────────────────────────────────────────────────────────
+
+preprocessing:
+  gaussian:
+    kernel_size: 5        # must be odd
+    sigma: 1.0
+  median:
+    kernel_size: 5        # must be odd
+  noise:
+    type: "gaussian"      # "gaussian" or "salt_pepper"
+    intensity: 25.0
+
+pyramids:
+  levels: 5
+  sigma: 1.0
+
+pipeline:
+  run_preprocessing: true
+  run_pyramids: true
+  run_feature_detection: false   # not implemented yet
+  run_stitching: false           # not implemented yet
+  run_segmentation: false        # not implemented yet
+  run_classification: false      # not implemented yet
+
+output:
+  save_dir: "outputs/"
+  save_figures: true
