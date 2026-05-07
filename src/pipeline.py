@@ -14,7 +14,10 @@ from src.pyramids.pyramid import (
     build_laplacian_pyramid,
     reconstruct_from_laplacian
 )
-
+from src.feature_detection.detector import detect_features
+from src.matching.matcher import match_features
+from src.stitching.stitcher import stitch_image_pair
+from src.segmentation.segmenter import segment
 
 def load_config(config_path: str = "config.yaml") -> Dict:
     """
@@ -113,20 +116,118 @@ def run_pipeline(images: List[np.ndarray], settings: Dict) -> Dict:
         results["pyramids"] = run_pyramids(image, settings)
         print("[Pipeline] Pyramids done.")
 
-    # ── Step 3: Feature Detection (not implemented yet) ──
+    # ── Step 3: Feature Detection ──
     if settings.get("run_feature_detection", False):
-        print("[Pipeline] Feature detection not implemented yet.")
-        pass
 
-    # ── Step 4: Stitching (not implemented yet) ──
+        print("[Pipeline] Running feature detection...")
+
+        if len(images) < 2:
+            raise ValueError(
+                "Need at least 2 images for feature detection."
+            )
+
+        img1 = images[0]
+        img2 = images[1]
+
+        # Detect features
+        kp1, des1 = detect_features(
+            img1,
+            method="sift"
+        )
+
+        kp2, des2 = detect_features(
+            img2,
+            method="sift"
+        )
+
+        # Match descriptors
+        matches = match_features(des1, des2)
+
+        results["features"] = {
+            "kp1": kp1,
+            "kp2": kp2,
+            "des1": des1,
+            "des2": des2,
+            "matches": matches
+        }
+
+        print(f"[Pipeline] Matches found: {len(matches)}")
+        print("[Pipeline] Feature detection done.")
+
+    # ── Step 4: Stitching ──
     if settings.get("run_stitching", False):
-        print("[Pipeline] Stitching not implemented yet.")
-        pass
 
-    # ── Step 5: Segmentation (not implemented yet) ──
+        print("[Pipeline] Running stitching...")
+
+        if len(images) < 2:
+            raise ValueError(
+                "At least 2 images are required for stitching."
+            )
+
+        panorama = images[0]
+        H = None
+        mask = None
+
+        for i in range(1, len(images)):
+
+            next_image = images[i]
+
+            # Detect features
+            kp1, des1 = detect_features(
+                panorama,
+                method="sift"
+            )
+
+            kp2, des2 = detect_features(
+                next_image,
+                method="sift"
+            )
+
+            # Match descriptors
+            matches = match_features(des1, des2)
+
+            print(
+                f"[Pipeline] Stitching image {i} "
+                f"with {len(matches)} matches."
+            )
+
+            # Stitch current panorama with next image
+            panorama, H, mask = stitch_image_pair(
+                panorama,
+                next_image,
+                kp1,
+                kp2,
+                matches
+            )
+
+        results["stitching"] = {
+            "panorama": panorama,
+            "homography": H,
+            "mask": mask
+        }
+
+        print("[Pipeline] Stitching done.")
+
+    # ── Step 5: Segmentation ──
     if settings.get("run_segmentation", False):
-        print("[Pipeline] Segmentation not implemented yet.")
-        pass
+
+        print("[Pipeline] Running segmentation...")
+
+        if "stitching" not in results:
+            raise RuntimeError(
+                "Stitching must run before segmentation."
+            )
+
+        panorama = results["stitching"]["panorama"]
+
+        segmentation_result = segment(
+            panorama,
+            method="kmeans"
+        )
+
+        results["segmentation"] = segmentation_result
+
+        print("[Pipeline] Segmentation done.")
 
     # ── Step 6: Classification (not implemented yet) ──
     if settings.get("run_classification", False):

@@ -98,3 +98,48 @@ def warp_and_position_images(
     translated_img2[ty:row_end, tx:col_end] = img2[:(row_end - ty), :(col_end - tx)]
 
     return warped_img1, translated_img2
+
+
+def crop_black_borders(image: np.ndarray) -> np.ndarray:
+    """
+    Finds the largest axis-aligned rectangle fully inside the valid
+    (non-black) region of the panorama and returns it cropped.
+    Works for any warp direction — horizontal, vertical, or mixed.
+    """
+    if image is None:
+        return image
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+    mask = (mask > 0).astype(np.uint8)
+
+    h, w = mask.shape
+    best_area = 0
+    best_rect = (0, 0, w, h)  # fallback: full image
+
+    # For every possible top and bottom row pair,
+    # find the widest horizontal span fully inside the mask
+    # Use row histograms for efficiency
+    heights = np.zeros(w, dtype=np.int32)
+
+    for row in range(h):
+        # Update histogram: how many consecutive valid rows ending at this row per column
+        heights = np.where(mask[row] == 1, heights + 1, 0)
+
+        # Largest rectangle in this histogram (stack-based O(w))
+        stack = []
+        for col in range(w + 1):
+            h_cur = heights[col] if col < w else 0
+            start = col
+            while stack and stack[-1][1] > h_cur:
+                s_col, s_h = stack.pop()
+                area = (col - s_col) * s_h
+                if area > best_area:
+                    best_area = area
+                    # Rectangle: bottom = row, top = row - s_h + 1
+                    best_rect = (s_col, row - s_h + 1, col, row + 1)
+                start = s_col
+            stack.append((start, h_cur))
+
+    x1, y1, x2, y2 = best_rect
+    return image[y1:y2, x1:x2]

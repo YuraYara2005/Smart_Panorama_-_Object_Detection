@@ -4,7 +4,7 @@ import numpy as np
 from typing import Optional, List, Dict
 
 
-def display_image(image: np.ndarray, title: str = "", use_column_width: bool = True) -> None:
+def display_image(image: np.ndarray, title: str = "") -> None:
     """
     Displays a single BGR image in the Streamlit app.
     """
@@ -19,7 +19,7 @@ def display_image(image: np.ndarray, title: str = "", use_column_width: bool = T
 
     if title:
         st.subheader(title)
-    st.image(rgb_image, use_column_width=use_column_width)
+    st.image(rgb_image, width="stretch")
 
 
 def display_image_grid(images: List[np.ndarray], titles: List[str]) -> None:
@@ -108,7 +108,7 @@ def display_pipeline_results(results: Dict) -> None:
     if "segmentation" in results:
         st.markdown("---")
         st.header("Segmentation Result")
-        display_image(results["segmentation"].get("segmented"), title="Segmented Image")
+        display_image(results["segmentation"].get("segmented_image"), title="Segmented Image")
 
     if "classification" in results:
         st.markdown("---")

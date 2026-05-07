@@ -19,9 +19,9 @@ pyramids:
 pipeline:
   run_preprocessing: true
   run_pyramids: true
-  run_feature_detection: false   # not implemented yet
-  run_stitching: false           # not implemented yet
-  run_segmentation: false        # not implemented yet
+  run_feature_detection: true
+  run_stitching: true
+  run_segmentation: true
   run_classification: false      # not implemented yet
 
 output:
