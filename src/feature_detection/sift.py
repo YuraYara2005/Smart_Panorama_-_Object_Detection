@@ -13,7 +13,7 @@ def detect_sift_features(image: np.ndarray):
     else:
         gray = image.copy()
 
-    sift = cv2.SIFT_create()
+    sift = cv2.SIFT_create(nfeatures=2000)
 
     keypoints, descriptors = sift.detectAndCompute(gray, None)
 
