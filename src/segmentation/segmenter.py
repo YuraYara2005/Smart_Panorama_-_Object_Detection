@@ -17,11 +17,12 @@ def segment(image, method="kmeans"):
 
     elif method == "watershed":
 
-        segmented, labels = watershed_segment(image)
+        segmented, labels, masks = watershed_segment(image)
 
         return {
             "segmented_image": segmented,
             "labels": labels,
+            "masks": masks,
             "method": method
         }
 
