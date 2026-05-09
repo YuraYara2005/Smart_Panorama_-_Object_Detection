@@ -18,7 +18,7 @@ def display_image(image: np.ndarray, title: str = "") -> None:
 
     if title:
         st.subheader(title)
-    st.image(rgb_image, use_column_width=True)
+    st.image(rgb_image, use_container_width=True)
 
 
 def display_image_grid(images: List[np.ndarray], titles: List[str]) -> None:
@@ -177,4 +177,4 @@ def display_pipeline_results(results: Dict) -> None:
                 kernel = np.ones((3, 3), np.uint8)
                 boundary_mask = cv2.dilate(boundary_mask, kernel, iterations=1)
                 st.subheader("Watershed Boundaries")
-                st.image(boundary_mask, use_column_width=True)
+                st.image(boundary_mask, use_container_width=True)
