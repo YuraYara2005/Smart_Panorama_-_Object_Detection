@@ -93,7 +93,21 @@ def render_controls(config: Dict) -> Dict:
     )
 
     if settings["run_feature_detection"]:
-        st.sidebar.info("Upload at least 2 images for feature detection and matching.")
+        st.sidebar.info("Upload at least 2 images for SIFT + Harris detection.")
+
+        st.sidebar.subheader("Harris Corner Detector")
+        settings["harris_threshold"] = st.sidebar.slider(
+            "Harris Threshold Ratio",
+            min_value=0.001,
+            max_value=0.1,
+            value=0.01,
+            step=0.001,
+            format="%.3f",
+            help=(
+                "Fraction of the max response used as the corner threshold. "
+                "Lower = more corners detected; higher = only the strongest corners."
+            )
+        )
 
     # ── Stitching ──
     st.sidebar.markdown("---")
@@ -124,15 +138,27 @@ def render_controls(config: Dict) -> Dict:
         )
         st.sidebar.info("Segmentation runs on the stitched panorama.")
 
-    # ── Classification (not ready yet) ──
+    # ── Classification ──
     st.sidebar.markdown("---")
     st.sidebar.header("Classification")
-    st.sidebar.checkbox(
+
+    settings["run_classification"] = st.sidebar.checkbox(
         "Run Classification",
         value=False,
-        disabled=True,
-        help="Not implemented yet."
+        help=(
+            "Loads the pre-trained Random Forest model from data/classification/. "
+            "Run train.py first to generate the model files."
+        )
     )
+
+    if settings["run_classification"]:
+        settings["classification_model_dir"] = st.sidebar.text_input(
+            "Model directory",
+            value="data/classification"
+        )
+        st.sidebar.info(
+            "Make sure train.py has been run and model files exist in the directory above."
+        )
 
     # ── Run Button ──
     st.sidebar.markdown("---")
