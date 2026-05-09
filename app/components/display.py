@@ -1,7 +1,7 @@
 import streamlit as st
 import cv2
 import numpy as np
-from typing import Optional, List, Dict
+from typing import List, Dict
 
 
 def display_image(image: np.ndarray, title: str = "") -> None:
@@ -11,7 +11,6 @@ def display_image(image: np.ndarray, title: str = "") -> None:
     if image is None:
         return
 
-    # Convert BGR to RGB for display
     if image.ndim == 3:
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     else:
@@ -29,7 +28,6 @@ def display_image_grid(images: List[np.ndarray], titles: List[str]) -> None:
     if not images:
         return
 
-    # Filter out None images
     valid = [(img, title) for img, title in zip(images, titles) if img is not None]
     if not valid:
         return
@@ -42,7 +40,7 @@ def display_image_grid(images: List[np.ndarray], titles: List[str]) -> None:
 
 def display_metrics(metrics: Dict) -> None:
     """
-    Displays evaluation metrics (MSE, PSNR, SSIM, SNR) in a clean table.
+    Displays evaluation metrics (MSE, PSNR, SSIM, SNR).
     """
     if not metrics:
         return
@@ -106,7 +104,6 @@ def display_pipeline_results(results: Dict) -> None:
 
         if "laplacian_pyramid" in pyr:
             st.subheader("Laplacian Pyramid")
-            # Normalize laplacian levels for display
             normalized = []
             for level in pyr["laplacian_pyramid"]:
                 level_f = level.astype(np.float32)
@@ -171,7 +168,6 @@ def display_pipeline_results(results: Dict) -> None:
             st.subheader("Watershed Segmentation")
             display_image(seg["watershed_segmented"])
 
-            # Show watershed boundaries if labels exist
             if "watershed_labels" in seg:
                 boundary_mask = np.zeros(
                     seg["watershed_labels"].shape,
