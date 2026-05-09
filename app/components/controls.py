@@ -1,23 +1,6 @@
-import cv2
-import numpy as np
+import streamlit as st
 import yaml
-from typing import Dict, List
-
-from src.preprocessing.filters import (
-    gaussian_filter_cv,
-    median_filter_cv,
-    add_noise
-)
-from src.preprocessing.evaluation import compute_all_metrics
-from src.pyramids.pyramid import (
-    build_gaussian_pyramid,
-    build_laplacian_pyramid,
-    reconstruct_from_laplacian
-)
-from src.feature_detection.sift import detect_sift_features, draw_keypoints
-from src.matching.matcher import match_features, draw_matches
-from src.stitching.stitcher import stitch_image_pair
-from src.segmentation.segmenter import segment
+from typing import Dict
 
 
 def load_config(config_path: str = "config.yaml") -> Dict:
@@ -25,165 +8,163 @@ def load_config(config_path: str = "config.yaml") -> Dict:
         return yaml.safe_load(f)
 
 
-def run_preprocessing(image: np.ndarray, settings: Dict) -> Dict:
-    noisy = add_noise(
-        image,
-        noise_type=settings["noise_type"],
-        intensity=settings["noise_intensity"]
-    )
-    gaussian_result = gaussian_filter_cv(
-        noisy,
-        kernel_size=settings["gaussian_kernel_size"],
-        sigma=settings["gaussian_sigma"]
-    )
-    median_result = median_filter_cv(
-        noisy,
-        kernel_size=settings["median_kernel_size"]
-    )
-    metrics_gaussian = compute_all_metrics(image, gaussian_result, label="Gaussian Filter")
-    metrics_median   = compute_all_metrics(image, median_result,   label="Median Filter")
+def render_controls(config: Dict) -> Dict:
+    st.sidebar.title("⚙️ Pipeline Controls")
 
-    return {
-        "original":         image,
-        "noisy":            noisy,
-        "gaussian":         gaussian_result,
-        "median":           median_result,
-        "metrics_gaussian": metrics_gaussian,
-        "metrics_median":   metrics_median,
-    }
+    settings = {}
 
+    # ── Preprocessing ──
+    st.sidebar.markdown("---")
+    st.sidebar.header("Preprocessing")
 
-def run_pyramids(image: np.ndarray, settings: Dict) -> Dict:
-    gaussian_pyramid  = build_gaussian_pyramid(
-        image,
-        levels=settings["pyramid_levels"],
-        sigma=settings["pyramid_sigma"]
-    )
-    laplacian_pyramid = build_laplacian_pyramid(gaussian_pyramid)
-    reconstructed     = reconstruct_from_laplacian(laplacian_pyramid)
-
-    return {
-        "original":          image,
-        "gaussian_pyramid":  gaussian_pyramid,
-        "laplacian_pyramid": laplacian_pyramid,
-        "reconstructed":     reconstructed,
-    }
-
-
-def run_feature_detection(images: List[np.ndarray]) -> Dict:
-    if len(images) < 2:
-        raise ValueError("Need at least 2 images for feature detection and matching.")
-
-    img1, img2 = images[0], images[1]
-
-    # Detect features
-    kp1, des1 = detect_sift_features(img1)
-    kp2, des2 = detect_sift_features(img2)
-
-    # Match features
-    matches = match_features(des1, des2)
-
-    # Draw keypoints and matches for visualization
-    kp_img1    = draw_keypoints(img1, kp1)
-    kp_img2    = draw_keypoints(img2, kp2)
-    match_img  = draw_matches(img1, kp1, img2, kp2, matches)
-
-    return {
-        "kp1":       kp1,
-        "kp2":       kp2,
-        "des1":      des1,
-        "des2":      des2,
-        "matches":   matches,
-        "kp_img1":   kp_img1,
-        "kp_img2":   kp_img2,
-        "match_img": match_img,
-    }
-
-
-def run_stitching(images: List[np.ndarray], feature_results: Dict) -> Dict:
-    img1, img2 = images[0], images[1]
-
-    panorama, H, mask = stitch_image_pair(
-        img1,
-        img2,
-        feature_results["kp1"],
-        feature_results["kp2"],
-        feature_results["matches"]
+    settings["run_preprocessing"] = st.sidebar.checkbox(
+        "Run Preprocessing",
+        value=config["pipeline"]["run_preprocessing"]
     )
 
-    return {
-        "panorama":   panorama,
-        "homography": H,
-        "mask":       mask,
-    }
+    if settings["run_preprocessing"]:
+        st.sidebar.subheader("Gaussian Filter")
+        settings["gaussian_kernel_size"] = st.sidebar.select_slider(
+            "Gaussian Kernel Size",
+            options=[3, 5, 7, 9, 11],
+            value=config["preprocessing"]["gaussian"]["kernel_size"]
+        )
+        settings["gaussian_sigma"] = st.sidebar.slider(
+            "Gaussian Sigma",
+            min_value=0.1,
+            max_value=5.0,
+            value=float(config["preprocessing"]["gaussian"]["sigma"]),
+            step=0.1
+        )
 
+        st.sidebar.subheader("Median Filter")
+        settings["median_kernel_size"] = st.sidebar.select_slider(
+            "Median Kernel Size",
+            options=[3, 5, 7, 9, 11],
+            value=config["preprocessing"]["median"]["kernel_size"]
+        )
 
-def run_segmentation(panorama: np.ndarray, settings: Dict) -> Dict:
-    results = {}
+        st.sidebar.subheader("Noise")
+        settings["noise_type"] = st.sidebar.selectbox(
+            "Noise Type",
+            options=["gaussian", "salt_pepper"],
+            index=0 if config["preprocessing"]["noise"]["type"] == "gaussian" else 1
+        )
+        settings["noise_intensity"] = st.sidebar.slider(
+            "Noise Intensity",
+            min_value=1.0,
+            max_value=100.0,
+            value=float(config["preprocessing"]["noise"]["intensity"]),
+            step=1.0
+        )
 
-    # KMeans segmentation
-    kmeans_result = segment(panorama, method="kmeans")
-    results["kmeans_segmented"] = kmeans_result["segmented_image"]
-    results["kmeans_labels"]    = kmeans_result["labels"]
+    # ── Pyramids ──
+    st.sidebar.markdown("---")
+    st.sidebar.header("Pyramids")
 
-    # Watershed segmentation
-    watershed_result = segment(panorama, method="watershed")
-    results["watershed_segmented"] = watershed_result["segmented_image"]
-    results["watershed_labels"]    = watershed_result["labels"]
+    settings["run_pyramids"] = st.sidebar.checkbox(
+        "Run Pyramids",
+        value=config["pipeline"]["run_pyramids"]
+    )
 
-    return results
+    if settings["run_pyramids"]:
+        settings["pyramid_levels"] = st.sidebar.slider(
+            "Pyramid Levels",
+            min_value=2,
+            max_value=8,
+            value=config["pyramids"]["levels"],
+            step=1
+        )
+        settings["pyramid_sigma"] = st.sidebar.slider(
+            "Pyramid Sigma",
+            min_value=0.1,
+            max_value=3.0,
+            value=float(config["pyramids"]["sigma"]),
+            step=0.1
+        )
 
+    # ── Feature Detection ──
+    st.sidebar.markdown("---")
+    st.sidebar.header("Feature Detection & Matching")
 
-def run_pipeline(images: List[np.ndarray], settings: Dict) -> Dict:
-    if not images:
-        return {}
+    settings["run_feature_detection"] = st.sidebar.checkbox(
+        "Run Feature Detection",
+        value=config["pipeline"]["run_feature_detection"]
+    )
 
-    results = {}
+    if settings["run_feature_detection"]:
+        st.sidebar.info("Upload at least 2 images for SIFT + Harris detection.")
 
-    # ── Step 1: Preprocessing ──
-    if settings.get("run_preprocessing", False):
-        print("[Pipeline] Running preprocessing...")
-        results["preprocessing"] = run_preprocessing(images[0], settings)
-        print("[Pipeline] Preprocessing done.")
-
-    # ── Step 2: Pyramids ──
-    if settings.get("run_pyramids", False):
-        print("[Pipeline] Running pyramids...")
-        results["pyramids"] = run_pyramids(images[0], settings)
-        print("[Pipeline] Pyramids done.")
-
-    # ── Step 3: Feature Detection & Matching ──
-    if settings.get("run_feature_detection", False):
-        if len(images) < 2:
-            print("[Pipeline] Need at least 2 images for feature detection. Skipping.")
-        else:
-            print("[Pipeline] Running feature detection and matching...")
-            results["feature_detection"] = run_feature_detection(images)
-            print("[Pipeline] Feature detection done.")
-
-    # ── Step 4: Stitching ──
-    if settings.get("run_stitching", False):
-        if "feature_detection" not in results:
-            print("[Pipeline] Stitching requires feature detection. Skipping.")
-        else:
-            print("[Pipeline] Running stitching...")
-            results["stitching"] = run_stitching(images, results["feature_detection"])
-            print("[Pipeline] Stitching done.")
-
-    # ── Step 5: Segmentation ──
-    if settings.get("run_segmentation", False):
-        if "stitching" not in results:
-            print("[Pipeline] Segmentation requires stitching. Skipping.")
-        else:
-            print("[Pipeline] Running segmentation...")
-            results["segmentation"] = run_segmentation(
-                results["stitching"]["panorama"], settings
+        st.sidebar.subheader("Harris Corner Detector")
+        settings["harris_threshold"] = st.sidebar.slider(
+            "Harris Threshold Ratio",
+            min_value=0.001,
+            max_value=0.1,
+            value=0.01,
+            step=0.001,
+            format="%.3f",
+            help=(
+                "Fraction of the max response used as the corner threshold. "
+                "Lower = more corners detected; higher = only the strongest corners."
             )
-            print("[Pipeline] Segmentation done.")
+        )
 
-    # ── Step 6: Classification (not implemented yet) ──
-    if settings.get("run_classification", False):
-        print("[Pipeline] Classification not implemented yet.")
-        pass
+    # ── Stitching ──
+    st.sidebar.markdown("---")
+    st.sidebar.header("Stitching")
 
-    return results
+    settings["run_stitching"] = st.sidebar.checkbox(
+        "Run Stitching",
+        value=config["pipeline"]["run_stitching"]
+    )
+
+    if settings["run_stitching"]:
+        st.sidebar.info("Stitching requires feature detection to be enabled.")
+
+    # ── Segmentation ──
+    st.sidebar.markdown("---")
+    st.sidebar.header("Segmentation")
+
+    settings["run_segmentation"] = st.sidebar.checkbox(
+        "Run Segmentation",
+        value=config["pipeline"]["run_segmentation"]
+    )
+
+    if settings["run_segmentation"]:
+        settings["segmentation_method"] = st.sidebar.selectbox(
+            "Segmentation Method",
+            options=["both", "kmeans", "watershed"],
+            index=0
+        )
+        st.sidebar.info("Segmentation runs on the stitched panorama.")
+
+    # ── Classification ──
+    st.sidebar.markdown("---")
+    st.sidebar.header("Classification")
+
+    settings["run_classification"] = st.sidebar.checkbox(
+        "Run Classification",
+        value=False,
+        help=(
+            "Loads the pre-trained Random Forest model from data/classification/. "
+            "Run train.py first to generate the model files."
+        )
+    )
+
+    if settings["run_classification"]:
+        settings["classification_model_dir"] = st.sidebar.text_input(
+            "Model directory",
+            value="data/classification"
+        )
+        st.sidebar.info(
+            "Make sure train.py has been run and model files exist in the directory above."
+        )
+
+    # ── Run Button ──
+    st.sidebar.markdown("---")
+    settings["run_pipeline"] = st.sidebar.button(
+        "▶️ Run Pipeline",
+        use_container_width=True
+    )
+
+    return settings
