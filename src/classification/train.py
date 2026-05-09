@@ -1,4 +1,4 @@
-from __future__ import annotations
+from _future_ import annotations
 
 import argparse
 import csv
@@ -12,28 +12,62 @@ import joblib
 import numpy as np
 
 from sklearn.decomposition import PCA
-from sklearn.ensemble import AdaBoostClassifier, GradientBoostingClassifier, RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-from sklearn.metrics import f1_score, precision_score, recall_score
-from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+
+from sklearn.ensemble import (
+    AdaBoostClassifier,
+    GradientBoostingClassifier,
+    RandomForestClassifier
+)
+
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
+
+from sklearn.model_selection import (
+    StratifiedKFold,
+    cross_val_score,
+    train_test_split
+)
+
+from sklearn.preprocessing import (
+    LabelEncoder,
+    StandardScaler
+)
+
 from sklearn.tree import DecisionTreeClassifier
 
-if __package__ in (None, ""):
 
-    project_root = Path(__file__).resolve().parents[2]
+if _package_ in (None, ""):
+
+    project_root = Path(_file_).resolve().parents[2]
 
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from src.classification.dataset import CocoObjectDatasetBuilder, ObjectSample
-    from src.classification.features import extract_object_features
+    from src.classification.dataset import (
+        CocoObjectDatasetBuilder,
+        ObjectSample
+    )
+
+    from src.classification.cnn_features import (
+        extract_cnn_features
+    )
 
 else:
 
-    from .dataset import CocoObjectDatasetBuilder, ObjectSample
-    from .features import extract_object_features
+    from .dataset import (
+        CocoObjectDatasetBuilder,
+        ObjectSample
+    )
 
+    from .cnn_features import (
+        extract_cnn_features
+    )
 
 # =====================================================
 # ARGUMENTS
@@ -142,11 +176,12 @@ def build_feature_matrix(
 
             image_cache[sample.image_path] = image
 
-        feature_vector = extract_object_features(
-            image=image,
-            mask=sample.mask,
-            bbox=sample.bbox
+        feature_vector = extract_cnn_features(
+            image,
+            sample.bbox
         )
+        if feature_vector is None:
+            continue
 
         features.append(feature_vector)
 

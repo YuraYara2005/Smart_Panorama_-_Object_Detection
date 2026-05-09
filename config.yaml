@@ -22,7 +22,7 @@ pipeline:
   run_feature_detection: true
   run_stitching: true
   run_segmentation: true
-  run_classification: false      # not implemented yet
+  run_classification: true
 
 output:
   save_dir: "outputs/"
