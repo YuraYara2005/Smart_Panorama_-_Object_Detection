@@ -129,21 +129,39 @@ def display_pipeline_results(results: Dict) -> None:
         st.header("🔍 Feature Detection & Matching")
         feat = results["feature_detection"]
 
+        # ── SIFT keypoints ──
+        st.subheader("SIFT Keypoints")
         display_image_grid(
-            images=[
-                feat.get("kp_img1"),
-                feat.get("kp_img2")
-            ],
-            titles=[
-                "Keypoints — Image 1",
-                "Keypoints — Image 2"
-            ]
+            images=[feat.get("kp_img1"), feat.get("kp_img2")],
+            titles=["SIFT Keypoints — Image 1", "SIFT Keypoints — Image 2"]
         )
 
         if "match_img" in feat:
-            st.subheader("Feature Matches")
+            st.subheader("SIFT Feature Matches")
             display_image(feat["match_img"])
             st.write(f"**Total good matches:** {len(feat.get('matches', []))}")
+
+        # ── Harris corners ──
+        st.subheader("Harris Corner Detector")
+        st.caption(
+            "Harris corners detected using the threshold ratio set in the sidebar. "
+            "Adjust the slider to see how threshold tuning changes the number of corners detected."
+        )
+
+        display_image_grid(
+            images=[feat.get("harris_img1"), feat.get("harris_img2")],
+            titles=["Harris Corners — Image 1", "Harris Corners — Image 2"]
+        )
+
+        col1, col2 = st.columns(2)
+        col1.metric(
+            "Corners detected (Image 1)",
+            len(feat.get("harris_kp1", []))
+        )
+        col2.metric(
+            "Corners detected (Image 2)",
+            len(feat.get("harris_kp2", []))
+        )
 
     # ── Stitching ──
     if "stitching" in results:
@@ -153,6 +171,18 @@ def display_pipeline_results(results: Dict) -> None:
 
         if "panorama" in stitch:
             display_image(stitch["panorama"], title="Stitched Panorama")
+
+        # Matching accuracy metrics
+        n_matches    = stitch.get("n_matches", 0)
+        n_inliers    = stitch.get("n_inliers", 0)
+        inlier_ratio = stitch.get("inlier_ratio", 0.0)
+
+        if n_matches > 0:
+            st.subheader("Matching Accuracy")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Total matches",  n_matches)
+            c2.metric("RANSAC inliers", n_inliers)
+            c3.metric("Inlier ratio",   f"{inlier_ratio:.2%}")
 
     # ── Segmentation ──
     if "segmentation" in results:
@@ -178,3 +208,49 @@ def display_pipeline_results(results: Dict) -> None:
                 boundary_mask = cv2.dilate(boundary_mask, kernel, iterations=1)
                 st.subheader("Watershed Boundaries")
                 st.image(boundary_mask, use_container_width=True)
+
+        # Cross-method IoU
+        if "cross_iou" in seg:
+            st.subheader("Segmentation Quality Metric")
+            st.metric(
+                "IoU — KMeans vs Watershed foreground",
+                f"{seg['cross_iou']:.4f}",
+                help=(
+                    "Intersection over Union between the foreground masks produced by "
+                    "KMeans and Watershed. A higher value means both methods agree on "
+                    "what is foreground."
+                )
+            )
+
+    # ── Classification ──
+    if "classification" in results:
+        st.markdown("---")
+        st.header("🏷️ Classification Results")
+        clf = results["classification"]
+
+        if "error" in clf:
+            st.error(clf["error"])
+            st.info(
+                "To generate model files, run `python src/classification/train.py` "
+                "with your dataset path. See train.py --help for arguments."
+            )
+        else:
+            predictions = clf.get("predictions", [])
+            if not predictions:
+                st.warning("No classifiable object crops were found in the panorama.")
+            else:
+                st.write(
+                    f"Classified **{len(predictions)}** object crops "
+                    "from the segmented panorama:"
+                )
+                cols = st.columns(min(len(predictions), 3))
+                for i, pred in enumerate(predictions):
+                    crop = pred["crop"]
+                    if crop is not None and crop.size > 0:
+                        rgb_crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                        with cols[i % 3]:
+                            st.image(rgb_crop, use_container_width=True)
+                            st.caption(
+                                f"**{pred['label']}**  \n"
+                                f"Confidence: {pred['confidence']:.1%}"
+                            )
