@@ -8,7 +8,6 @@ import cv2
 import joblib
 import numpy as np
 
-
 if __package__ in (None, ""):
 
     project_root = Path(__file__).resolve().parents[2]
@@ -50,7 +49,6 @@ else:
 # =====================================================
 # ARGUMENTS
 # =====================================================
-
 
 def parse_args():
 
@@ -101,7 +99,6 @@ def parse_args():
 # HELPERS
 # =====================================================
 
-
 def bbox_from_mask(mask):
 
     ys, xs = np.where(mask > 0)
@@ -126,7 +123,6 @@ def bbox_from_mask(mask):
 # =====================================================
 # MAIN
 # =====================================================
-
 
 def main():
 
@@ -233,8 +229,33 @@ def main():
 
             x, y, w, h = bbox
 
-            # Skip tiny objects
-            if w < 30 or h < 30:
+            # =================================================
+            # FILTERING
+            # =================================================
+
+            area = w * h
+
+            image_area = (
+                image.shape[0]
+                * image.shape[1]
+            )
+
+            # Skip tiny regions
+            if area < 4000:
+                continue
+
+            # Skip huge regions
+            if area > image_area * 0.35:
+                continue
+
+            # Aspect ratio filtering
+            aspect_ratio = w / float(h)
+
+            if (
+                aspect_ratio > 4
+                or
+                aspect_ratio < 0.25
+            ):
                 continue
 
             # =================================================
@@ -290,7 +311,7 @@ def main():
                 class_name,
                 (x, y - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
+                0.5,
                 (0, 255, 0),
                 2
             )
@@ -308,9 +329,12 @@ def main():
     print(
         f"Detected objects: {predictions_count}"
     )
+
+
 # =====================================================
 # ENTRY
 # =====================================================
+
 if __name__ == "__main__":
 
     main()

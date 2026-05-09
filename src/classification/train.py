@@ -1,4 +1,4 @@
-from _future_ import annotations
+from __future__ import annotations
 
 import argparse
 import csv
@@ -42,9 +42,9 @@ from sklearn.preprocessing import (
 from sklearn.tree import DecisionTreeClassifier
 
 
-if _package_ in (None, ""):
+if __package__ in (None, ""):
 
-    project_root = Path(_file_).resolve().parents[2]
+    project_root = Path(__file__).resolve().parents[2]
 
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
