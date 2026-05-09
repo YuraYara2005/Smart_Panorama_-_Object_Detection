@@ -19,7 +19,6 @@ from src.feature_detection.harris import detect_harris_corners, draw_harris_corn
 from src.matching.matcher import match_features, draw_matches
 from src.stitching.stitcher import stitch_image_pair
 from src.segmentation.segmenter import segment
-from src.classification.predict import PanoramaObjectClassifier
 from src.segmentation.metrics import iou
 
 
@@ -158,57 +157,6 @@ def run_segmentation(panorama: np.ndarray, settings: Dict) -> Dict:
 
     return results
 
-#i added these we can delete them if they miss things up
-def extract_masks_from_labels(label_map):
-
-    masks = []
-
-    unique_labels = np.unique(label_map)
-
-    for label in unique_labels:
-
-        if label <= 1:
-            continue
-
-        mask = (label_map == label).astype("uint8")
-
-        if mask.sum() < 300:
-            continue
-
-        masks.append(mask)
-
-    return masks
-
-def draw_predictions(image, predictions):
-
-    output = image.copy()
-
-    for pred in predictions:
-
-        x, y, w, h = pred["bbox"]
-
-        label = pred["label"]
-
-        cv2.rectangle(
-            output,
-            (x, y),
-            (x + w, y + h),
-            (0, 255, 0),
-            2
-        )
-
-        cv2.putText(
-            output,
-            label,
-            (x, y - 10),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),
-            2
-        )
-
-    return output
-
 def run_classification(panorama: np.ndarray, settings: Dict) -> Dict:
     """
     Runs inference using a pre-trained model saved by train.py.
@@ -331,46 +279,27 @@ def run_pipeline(images: List[np.ndarray], settings: Dict) -> Dict:
             print("[Pipeline] Segmentation done.")
 
     # ── Step 6: Classification ──
+    """
     if settings.get("run_classification", False):
 
-        if "segmentation" not in results:
+        if "stitching" not in results:
 
-            print("[Pipeline] Classification requires segmentation.")
+            print("[Pipeline] Classification requires stitching.")
 
         else:
 
             print("[Pipeline] Running classification...")
 
-            label_map = results["segmentation"]["watershed_labels"]
-
-            panorama = results["stitching"]["panorama"]
-
-            masks = extract_masks_from_labels(label_map)
-
-            classifier = PanoramaObjectClassifier(
-                model_dir="data/classification"
+            classification_results = run_classification(
+                results["stitching"]["panorama"],
+                settings
             )
 
-            predictions = classifier.predict_objects(
-                panorama,
-                masks
-            )
+            results["classification"] = classification_results
 
-            classified_image = draw_predictions(
-                panorama,
-                predictions
-            )
-
-            results["classified_panorama"] = classified_image
-
-            results["classification"] = predictions
-
-            print(
-                f"[Pipeline] Classified {len(predictions)} objects."
-            )
-
-#malak's changes
-"""           
+            print("[Pipeline] Classification done.")
+"""
+    if settings.get("run_classification", False):
         panorama = None
         if "stitching" in results:
             panorama = results["stitching"]["panorama"]
@@ -381,7 +310,7 @@ def run_pipeline(images: List[np.ndarray], settings: Dict) -> Dict:
             print("[Pipeline] Running classification...")
             results["classification"] = run_classification(panorama, settings)
             print("[Pipeline] Classification done.")
-        return results
-            """
+
+    return results
 
 
