@@ -225,10 +225,6 @@ def display_pipeline_results(results: Dict) -> None:
     # ── Classification ──
     if "classification" in results:
         st.markdown("---")
-<<<<<<< HEAD
-        st.header("Classification Result")
-        st.write(results["classification"].get("labels", "No labels yet."))
-=======
         st.header("🏷️ Classification Results")
         clf = results["classification"]
 
@@ -258,4 +254,3 @@ def display_pipeline_results(results: Dict) -> None:
                                 f"**{pred['label']}**  \n"
                                 f"Confidence: {pred['confidence']:.1%}"
                             )
->>>>>>> 10fcbefbe9f1eaabaae33fa0c98531a4b7415c63
