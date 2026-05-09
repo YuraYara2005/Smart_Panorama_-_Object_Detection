@@ -32,7 +32,7 @@ def upload_images() -> list:
 
             # Show thumbnail preview
             with cols[i % 4]:
-                st.image(pil_image, caption=file.name, width="stretch")
+                st.image(pil_image, caption=file.name, use_column_width=True)
     else:
         st.info("Please upload at least 2 images to create a panorama.")
 
