@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 outputs/
 dataset/
+.DS_Store
+.idea/
+*.jpg

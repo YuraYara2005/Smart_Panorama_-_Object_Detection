@@ -131,58 +131,201 @@ class CocoObjectDatasetBuilder:
 
         return {category_id: self.categories[category_id] for category_id in chosen}
 
+    # def build(self, max_images: Optional[int] = None) -> Tuple[List[ObjectSample], Dict[int, str]]:
+    #     selected_categories = self.select_categories()
+    #     category_counts = {category_id: 0 for category_id in selected_categories}
+    #     samples: List[ObjectSample] = []
+    #     image_ids = sorted(self.images)
+    #     if max_images is not None:
+    #         image_ids = image_ids[:max_images]
+    #
+    #     progress = tqdm(image_ids, desc="Building classification dataset", unit="image")
+    #     for image_id in progress:
+    #         if all(
+    #             count >= self.max_samples_per_category
+    #             for count in category_counts.values()
+    #         ):
+    #             break
+    #
+    #         image_meta = self.images[image_id]
+    #         image_path = self.images_dir / image_meta["file_name"]
+    #         if not image_path.exists():
+    #             continue
+    #
+    #         image = cv2.imread(str(image_path))
+    #         if image is None:
+    #             continue
+    #         height, width = image.shape[:2]
+    #         image_area = float(height * width)
+    #
+    #         annotations = [
+    #             annotation
+    #             for annotation in self.annotations_by_image.get(image_id, [])
+    #             if annotation["category_id"] in selected_categories
+    #             and not annotation.get("iscrowd", 0)
+    #             and self._annotation_is_usable(annotation, image_area)
+    #         ]
+    #         if not annotations:
+    #             continue
+    #
+    #         candidates = self._extract_candidates(image)
+    #         matches = self._match_candidates_to_annotations(
+    #             candidates=candidates,
+    #             annotations=annotations,
+    #             height=height,
+    #             width=width,
+    #         )
+    #
+    #         matched_annotation_ids = set()
+    #         for annotation, candidate_mask, match_score in matches:
+    #             category_id = annotation["category_id"]
+    #             if category_counts[category_id] >= self.max_samples_per_category:
+    #                 continue
+    #
+    #             x, y, w, h = self._bbox_from_mask(candidate_mask)
+    #             samples.append(
+    #                 ObjectSample(
+    #                     image_id=image_id,
+    #                     annotation_id=annotation["id"],
+    #                     category_id=category_id,
+    #                     category_name=selected_categories[category_id],
+    #                     image_path=str(image_path),
+    #                     bbox=(x, y, w, h),
+    #                     mask=candidate_mask.astype(np.uint8),
+    #                     match_iou=float(match_score),
+    #                     segmentation_method=self.segmentation_method,
+    #                 )
+    #             )
+    #             matched_annotation_ids.add(annotation["id"])
+    #             category_counts[category_id] += 1
+    #
+    #         if self.annotation_fallback:
+    #             for annotation in annotations:
+    #                 if annotation["id"] in matched_annotation_ids:
+    #                     continue
+    #                 category_id = annotation["category_id"]
+    #                 if category_counts[category_id] >= self.max_samples_per_category:
+    #                     continue
+    #                 mask = self._annotation_to_mask(annotation, height, width)
+    #                 if mask is None or int(mask.sum()) < self.min_mask_area:
+    #                     continue
+    #                 x, y, w, h = self._bbox_from_mask(mask)
+    #                 samples.append(
+    #                     ObjectSample(
+    #                         image_id=image_id,
+    #                         annotation_id=annotation["id"],
+    #                         category_id=category_id,
+    #                         category_name=selected_categories[category_id],
+    #                         image_path=str(image_path),
+    #                         bbox=(x, y, w, h),
+    #                         mask=mask.astype(np.uint8),
+    #                         match_iou=1.0,
+    #                         segmentation_method=f"{self.segmentation_method}_fallback",
+    #                     )
+    #                 )
+    #                 category_counts[category_id] += 1
+    #
+    #         progress.set_postfix(
+    #             {
+    #                 "samples": len(samples),
+    #                 "categories": sum(1 for count in category_counts.values() if count > 0),
+    #             }
+    #         )
+    #
+    #     filtered_samples = [
+    #         sample
+    #         for sample in samples
+    #         if category_counts[sample.category_id] > 1
+    #     ]
+    #     return filtered_samples, selected_categories
     def build(self, max_images: Optional[int] = None) -> Tuple[List[ObjectSample], Dict[int, str]]:
+
         selected_categories = self.select_categories()
-        category_counts = {category_id: 0 for category_id in selected_categories}
+
+        category_counts = {
+            category_id: 0
+            for category_id in selected_categories
+        }
+
         samples: List[ObjectSample] = []
+
         image_ids = sorted(self.images)
+
         if max_images is not None:
             image_ids = image_ids[:max_images]
 
-        progress = tqdm(image_ids, desc="Building classification dataset", unit="image")
+        progress = tqdm(
+            image_ids,
+            desc="Building classification dataset",
+            unit="image"
+        )
+
         for image_id in progress:
+
             if all(
-                count >= self.max_samples_per_category
-                for count in category_counts.values()
+                    count >= self.max_samples_per_category
+                    for count in category_counts.values()
             ):
                 break
 
             image_meta = self.images[image_id]
+
             image_path = self.images_dir / image_meta["file_name"]
+
             if not image_path.exists():
                 continue
 
             image = cv2.imread(str(image_path))
+
             if image is None:
                 continue
+
             height, width = image.shape[:2]
+
             image_area = float(height * width)
 
             annotations = [
                 annotation
                 for annotation in self.annotations_by_image.get(image_id, [])
-                if annotation["category_id"] in selected_categories
-                and not annotation.get("iscrowd", 0)
-                and self._annotation_is_usable(annotation, image_area)
+                if (
+                        annotation["category_id"] in selected_categories
+                        and not annotation.get("iscrowd", 0)
+                        and self._annotation_is_usable(annotation, image_area)
+                )
             ]
+
             if not annotations:
                 continue
 
-            candidates = self._extract_candidates(image)
-            matches = self._match_candidates_to_annotations(
-                candidates=candidates,
-                annotations=annotations,
-                height=height,
-                width=width,
-            )
+            # =============================================
+            # USE COCO BOUNDING BOXES DIRECTLY
+            # =============================================
 
-            matched_annotation_ids = set()
-            for annotation, candidate_mask, match_score in matches:
+            for annotation in annotations:
+
                 category_id = annotation["category_id"]
-                if category_counts[category_id] >= self.max_samples_per_category:
+
+                if (
+                        category_counts[category_id]
+                        >= self.max_samples_per_category
+                ):
                     continue
 
-                x, y, w, h = self._bbox_from_mask(candidate_mask)
+                x, y, w, h = map(
+                    int,
+                    annotation["bbox"]
+                )
+
+                if w <= 0 or h <= 0:
+                    continue
+
+                mask = np.zeros(
+                    (height, width),
+                    dtype=np.uint8
+                )
+
+                mask[y:y + h, x:x + w] = 1
+
                 samples.append(
                     ObjectSample(
                         image_id=image_id,
@@ -191,54 +334,30 @@ class CocoObjectDatasetBuilder:
                         category_name=selected_categories[category_id],
                         image_path=str(image_path),
                         bbox=(x, y, w, h),
-                        mask=candidate_mask.astype(np.uint8),
-                        match_iou=float(match_score),
-                        segmentation_method=self.segmentation_method,
+                        mask=mask.astype(np.uint8),
+                        match_iou=1.0,
+                        segmentation_method="coco_bbox"
                     )
                 )
-                matched_annotation_ids.add(annotation["id"])
+
                 category_counts[category_id] += 1
 
-            if self.annotation_fallback:
-                for annotation in annotations:
-                    if annotation["id"] in matched_annotation_ids:
-                        continue
-                    category_id = annotation["category_id"]
-                    if category_counts[category_id] >= self.max_samples_per_category:
-                        continue
-                    mask = self._annotation_to_mask(annotation, height, width)
-                    if mask is None or int(mask.sum()) < self.min_mask_area:
-                        continue
-                    x, y, w, h = self._bbox_from_mask(mask)
-                    samples.append(
-                        ObjectSample(
-                            image_id=image_id,
-                            annotation_id=annotation["id"],
-                            category_id=category_id,
-                            category_name=selected_categories[category_id],
-                            image_path=str(image_path),
-                            bbox=(x, y, w, h),
-                            mask=mask.astype(np.uint8),
-                            match_iou=1.0,
-                            segmentation_method=f"{self.segmentation_method}_fallback",
-                        )
-                    )
-                    category_counts[category_id] += 1
-
-            progress.set_postfix(
-                {
-                    "samples": len(samples),
-                    "categories": sum(1 for count in category_counts.values() if count > 0),
-                }
-            )
+            progress.set_postfix({
+                "samples": len(samples),
+                "categories": sum(
+                    1
+                    for count in category_counts.values()
+                    if count > 0
+                ),
+            })
 
         filtered_samples = [
             sample
             for sample in samples
             if category_counts[sample.category_id] > 1
         ]
-        return filtered_samples, selected_categories
 
+        return filtered_samples, selected_categories
     def _rank_categories(self, strategy: str) -> List[Tuple[float, int, int]]:
         ranked: List[Tuple[float, int, int]] = []
         for category_id, count in self.category_counts.items():
