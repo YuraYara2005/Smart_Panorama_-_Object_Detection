@@ -13,8 +13,8 @@ from src.segmentation.segmenter import segment
 # LOAD IMAGES
 # =====================================================
 
-img1 = cv2.imread("data/img1.jpg")
-img2 = cv2.imread("data/img2.jpg")
+img1 = cv2.imread("data/image1.jpg")
+img2 = cv2.imread("data/image2.jpg")
 
 if img1 is None or img2 is None:
     print("ERROR: images not loaded!")

@@ -27,3 +27,7 @@ pipeline:
 output:
   save_dir: "outputs/"
   save_figures: true
+
+  segmentation_max_width: 1200
+  yolo_model: yolov8n.pt
+  classification_confidence: 0.20

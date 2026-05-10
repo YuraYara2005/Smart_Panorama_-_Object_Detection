@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 
-def match_features(desc1, desc2, ratio=0.75):
+def match_features(desc1, desc2, ratio=0.6):
     """
     Match descriptors using BFMatcher + Lowe ratio test.
     """

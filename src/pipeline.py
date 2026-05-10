@@ -8,110 +8,251 @@ from src.preprocessing.filters import (
     median_filter_cv,
     add_noise
 )
-from src.preprocessing.evaluation import compute_all_metrics
+
+from src.preprocessing.evaluation import (
+    compute_all_metrics
+)
+
 from src.pyramids.pyramid import (
     build_gaussian_pyramid,
     build_laplacian_pyramid,
     reconstruct_from_laplacian
 )
-from src.feature_detection.sift import detect_sift_features, draw_keypoints
-from src.feature_detection.harris import detect_harris_corners, draw_harris_corners
-from src.matching.matcher import match_features, draw_matches
-from src.stitching.stitcher import stitch_image_pair
-from src.segmentation.segmenter import segment
-from src.segmentation.metrics import iou
 
+from src.feature_detection.sift import (
+    detect_sift_features,
+    draw_keypoints
+)
+
+from src.feature_detection.harris import (
+    detect_harris_corners,
+    draw_harris_corners
+)
+
+from src.matching.matcher import (
+    match_features,
+    draw_matches
+)
+
+from src.stitching.stitcher import (
+    stitch_image_pair
+)
+
+from src.segmentation.segmenter import (
+    segment
+)
+
+from src.segmentation.metrics import (
+    iou
+)
+
+
+# =====================================================
+# CONFIG
+# =====================================================
 
 def load_config(config_path: str = "config.yaml") -> Dict:
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
 
 
+# =====================================================
+# PREPROCESSING
+# =====================================================
+
 def run_preprocessing(image: np.ndarray, settings: Dict) -> Dict:
+
     noisy = add_noise(
         image,
-        noise_type=settings["noise_type"],
-        intensity=settings["noise_intensity"]
+        noise_type=settings.get(
+            "noise_type",
+            "gaussian"
+        ),
+        intensity=settings.get(
+            "noise_intensity",
+            25
+        )
     )
+
     gaussian_result = gaussian_filter_cv(
         noisy,
-        kernel_size=settings["gaussian_kernel_size"],
-        sigma=settings["gaussian_sigma"]
+        kernel_size=settings.get(
+            "gaussian_kernel_size",
+            5
+        ),
+        sigma=settings.get(
+            "gaussian_sigma",
+            1.0
+        )
     )
+
     median_result = median_filter_cv(
         noisy,
-        kernel_size=settings["median_kernel_size"]
+        kernel_size=settings.get(
+            "median_kernel_size",
+            5
+        )
     )
-    metrics_gaussian = compute_all_metrics(image, gaussian_result, label="Gaussian Filter")
-    metrics_median   = compute_all_metrics(image, median_result,   label="Median Filter")
+
+    metrics_gaussian = compute_all_metrics(
+        image,
+        gaussian_result,
+        label="Gaussian Filter"
+    )
+
+    metrics_median = compute_all_metrics(
+        image,
+        median_result,
+        label="Median Filter"
+    )
 
     return {
-        "original":         image,
-        "noisy":            noisy,
-        "gaussian":         gaussian_result,
-        "median":           median_result,
+        "original": image,
+        "noisy": noisy,
+        "gaussian": gaussian_result,
+        "median": median_result,
         "metrics_gaussian": metrics_gaussian,
-        "metrics_median":   metrics_median,
+        "metrics_median": metrics_median,
     }
 
+
+# =====================================================
+# PYRAMIDS
+# =====================================================
 
 def run_pyramids(image: np.ndarray, settings: Dict) -> Dict:
-    gaussian_pyramid  = build_gaussian_pyramid(
-        image,
-        levels=settings["pyramid_levels"],
-        sigma=settings["pyramid_sigma"]
+
+    levels = settings.get(
+        "pyramid_levels",
+        4
     )
-    laplacian_pyramid = build_laplacian_pyramid(gaussian_pyramid)
-    reconstructed     = reconstruct_from_laplacian(laplacian_pyramid)
+
+    sigma = settings.get(
+        "pyramid_sigma",
+        1.0
+    )
+
+    gaussian_pyramid = build_gaussian_pyramid(
+        image,
+        levels=levels,
+        sigma=sigma
+    )
+
+    laplacian_pyramid = build_laplacian_pyramid(
+        gaussian_pyramid
+    )
+
+    reconstructed = reconstruct_from_laplacian(
+        laplacian_pyramid
+    )
 
     return {
-        "original":          image,
-        "gaussian_pyramid":  gaussian_pyramid,
+        "original": image,
+        "gaussian_pyramid": gaussian_pyramid,
         "laplacian_pyramid": laplacian_pyramid,
-        "reconstructed":     reconstructed,
+        "reconstructed": reconstructed,
     }
 
 
-def run_feature_detection(images: List[np.ndarray], settings: Dict) -> Dict:
+# =====================================================
+# FEATURE DETECTION
+# =====================================================
+
+def run_feature_detection(
+    images: List[np.ndarray],
+    settings: Dict
+) -> Dict:
+
     if len(images) < 2:
-        raise ValueError("Need at least 2 images for feature detection and matching.")
+        raise ValueError(
+            "Need at least 2 images."
+        )
 
     img1, img2 = images[0], images[1]
 
     # ── SIFT ──
-    kp1, des1 = detect_sift_features(img1)
-    kp2, des2 = detect_sift_features(img2)
-    matches    = match_features(des1, des2)
-    kp_img1    = draw_keypoints(img1, kp1)
-    kp_img2    = draw_keypoints(img2, kp2)
-    match_img  = draw_matches(img1, kp1, img2, kp2, matches)
+    kp1, des1 = detect_sift_features(
+        img1
+    )
 
-    # ── Harris corners (both images, configurable threshold) ──
-    threshold_ratio = settings.get("harris_threshold", 0.01)
+    kp2, des2 = detect_sift_features(
+        img2
+    )
 
-    harris_kp1, _ = detect_harris_corners(img1, threshold_ratio=threshold_ratio)
-    harris_kp2, _ = detect_harris_corners(img2, threshold_ratio=threshold_ratio)
-    harris_img1   = draw_harris_corners(img1, harris_kp1)
-    harris_img2   = draw_harris_corners(img2, harris_kp2)
+    matches = match_features(
+        des1,
+        des2
+    )
+
+    kp_img1 = draw_keypoints(
+        img1,
+        kp1
+    )
+
+    kp_img2 = draw_keypoints(
+        img2,
+        kp2
+    )
+
+    match_img = draw_matches(
+        img1,
+        kp1,
+        img2,
+        kp2,
+        matches
+    )
+
+    # ── Harris ──
+    threshold_ratio = settings.get(
+        "harris_threshold",
+        0.01
+    )
+
+    harris_kp1, _ = detect_harris_corners(
+        img1,
+        threshold_ratio=threshold_ratio
+    )
+
+    harris_kp2, _ = detect_harris_corners(
+        img2,
+        threshold_ratio=threshold_ratio
+    )
+
+    harris_img1 = draw_harris_corners(
+        img1,
+        harris_kp1
+    )
+
+    harris_img2 = draw_harris_corners(
+        img2,
+        harris_kp2
+    )
 
     return {
-        "kp1":          kp1,
-        "kp2":          kp2,
-        "des1":         des1,
-        "des2":         des2,
-        "matches":      matches,
-        "kp_img1":      kp_img1,
-        "kp_img2":      kp_img2,
-        "match_img":    match_img,
-        # Harris results
-        "harris_kp1":   harris_kp1,
-        "harris_kp2":   harris_kp2,
-        "harris_img1":  harris_img1,
-        "harris_img2":  harris_img2,
+        "kp1": kp1,
+        "kp2": kp2,
+        "des1": des1,
+        "des2": des2,
+        "matches": matches,
+        "kp_img1": kp_img1,
+        "kp_img2": kp_img2,
+        "match_img": match_img,
+        "harris_kp1": harris_kp1,
+        "harris_kp2": harris_kp2,
+        "harris_img1": harris_img1,
+        "harris_img2": harris_img2,
     }
 
 
-def run_stitching(images: List[np.ndarray], feature_results: Dict) -> Dict:
+# =====================================================
+# STITCHING
+# =====================================================
+
+def run_stitching(
+    images: List[np.ndarray],
+    feature_results: Dict
+) -> Dict:
+
     img1, img2 = images[0], images[1]
 
     panorama, H, mask = stitch_image_pair(
@@ -122,195 +263,461 @@ def run_stitching(images: List[np.ndarray], feature_results: Dict) -> Dict:
         feature_results["matches"]
     )
 
-    # Compute inlier ratio for matching accuracy metric
-    n_matches = len(feature_results["matches"])
-    n_inliers = int(mask.sum()) if mask is not None else 0
-    inlier_ratio = round(n_inliers / max(n_matches, 1), 4)
+    n_matches = len(
+        feature_results["matches"]
+    )
+
+    n_inliers = int(
+        mask.sum()
+    ) if mask is not None else 0
+
+    inlier_ratio = round(
+        n_inliers / max(n_matches, 1),
+        4
+    )
 
     return {
-        "panorama":     panorama,
-        "homography":   H,
-        "mask":         mask,
-        "n_matches":    n_matches,
-        "n_inliers":    n_inliers,
+        "panorama": panorama,
+        "homography": H,
+        "mask": mask,
+        "n_matches": n_matches,
+        "n_inliers": n_inliers,
         "inlier_ratio": inlier_ratio,
     }
 
 
-def run_segmentation(panorama: np.ndarray, settings: Dict) -> Dict:
+# =====================================================
+# SEGMENTATION
+# =====================================================
+
+def run_segmentation(
+    panorama: np.ndarray,
+    settings: Dict
+) -> Dict:
+
     results = {}
 
-    # KMeans segmentation
-    kmeans_result = segment(panorama, method="kmeans")
-    results["kmeans_segmented"] = kmeans_result["segmented_image"]
-    results["kmeans_labels"]    = kmeans_result["labels"]
+    max_width = settings.get(
+        "segmentation_max_width",
+        1000
+    )
 
-    # Watershed segmentation
-    watershed_result = segment(panorama, method="watershed")
-    results["watershed_segmented"] = watershed_result["segmented_image"]
-    results["watershed_labels"]    = watershed_result["labels"]
+    h, w = panorama.shape[:2]
 
-    # IoU between kmeans and watershed as a quantitative cross-method metric
-    kmeans_fg    = (results["kmeans_labels"] > 0).astype(np.uint8)
-    watershed_fg = (results["watershed_labels"] > 1).astype(np.uint8)
-    results["cross_iou"] = round(float(iou(kmeans_fg, watershed_fg)), 4)
+    working_image = panorama.copy()
+
+    if w > max_width:
+
+        scale = max_width / float(w)
+
+        working_image = cv2.resize(
+            panorama,
+            (
+                max_width,
+                int(h * scale)
+            ),
+            interpolation=cv2.INTER_AREA
+        )
+
+    # KMeans
+    kmeans_result = segment(
+        working_image,
+        method="kmeans"
+    )
+
+    # Watershed
+    watershed_result = segment(
+        working_image,
+        method="watershed"
+    )
+
+    results["kmeans_segmented"] = kmeans_result[
+        "segmented_image"
+    ]
+
+    results["kmeans_labels"] = kmeans_result[
+        "labels"
+    ]
+
+    results["watershed_segmented"] = watershed_result[
+        "segmented_image"
+    ]
+
+    results["watershed_labels"] = watershed_result[
+        "labels"
+    ]
+
+    # IoU
+    kmeans_fg = (
+        results["kmeans_labels"] > 0
+    ).astype(np.uint8)
+
+    watershed_fg = (
+        results["watershed_labels"] > 1
+    ).astype(np.uint8)
+
+    results["cross_iou"] = round(
+        float(
+            iou(
+                kmeans_fg,
+                watershed_fg
+            )
+        ),
+        4
+    )
 
     return results
 
-def run_classification(panorama: np.ndarray, settings: Dict) -> Dict:
-    """
-    Runs inference using a pre-trained model saved by train.py.
-    Segments a few crops from the panorama and classifies each one.
-    Falls back gracefully if no model files are found.
-    """
-    import os, joblib
 
-    model_dir = settings.get("classification_model_dir", "data/classification")
+# =====================================================
+# CLASSIFICATION (YOLO)
+# =====================================================
 
-    required = [
-        os.path.join(model_dir, "random_forest.joblib"),
-        os.path.join(model_dir, "scaler.joblib"),
-        os.path.join(model_dir, "pca.joblib"),
-        os.path.join(model_dir, "label_encoder.joblib"),
-    ]
-
-    for path in required:
-        if not os.path.exists(path):
-            return {
-                "error": (
-                    f"Model file not found: {path}. "
-                    "Run train.py first to generate model files."
-                )
-            }
+def run_classification(
+    panorama: np.ndarray,
+    settings: Dict
+) -> Dict:
 
     try:
-        from src.classification.features import extract_object_features
-        from src.segmentation.segmenter import segment as seg_fn
+        from ultralytics import YOLO
 
-        rf            = joblib.load(required[0])
-        scaler        = joblib.load(required[1])
-        pca           = joblib.load(required[2])
-        label_encoder = joblib.load(required[3])
+    except ImportError:
+        return {
+            "error": (
+                "Ultralytics not installed. "
+                "Run: pip install ultralytics"
+            )
+        }
 
-        # Use kmeans to get a few object crops from the panorama
-        seg_out   = seg_fn(panorama, method="kmeans")
-        label_map = seg_out["labels"]
+    print(
+        "[Pipeline] YOLO classification backend ACTIVE"
+    )
 
-        predictions = []
-        for label_id in np.unique(label_map)[:6]:   # at most 6 crops
-            mask = (label_map == label_id).astype(np.uint8)
-            if mask.sum() < 500:
-                continue
-            ys, xs = np.where(mask > 0)
-            x, y   = int(xs.min()), int(ys.min())
-            w, h   = int(xs.max()) - x + 1, int(ys.max()) - y + 1
-            if w < 24 or h < 24:
-                continue
-            try:
-                feat    = extract_object_features(panorama, mask, (x, y, w, h))
-                feat_s  = scaler.transform(feat.reshape(1, -1))
-                feat_p  = pca.transform(feat_s)
-                pred_id = rf.predict(feat_p)[0]
-                proba   = rf.predict_proba(feat_p)[0]
-                label   = label_encoder.inverse_transform([pred_id])[0]
-                conf    = round(float(proba.max()), 3)
+    # Smaller + safer for Colab/local
+    model_name = settings.get(
+        "yolo_model",
+        "yolov8n.pt"
+    )
 
-                crop = panorama[y:y + h, x:x + w]
-                predictions.append({
-                    "label":      label,
-                    "confidence": conf,
-                    "crop":       crop,
-                    "bbox":       (x, y, w, h),
-                })
-            except Exception:
-                continue
+    confidence_threshold = settings.get(
+        "classification_confidence",
+        0.05
+    )
 
-        return {"predictions": predictions}
+    original_h, original_w = panorama.shape[:2]
+
+    max_detect_width = settings.get(
+        "classification_max_width",
+        1920
+    )
+
+    detection_image = panorama.copy()
+
+    scale_x = 1.0
+    scale_y = 1.0
+
+    # Resize large panoramas
+    if original_w > max_detect_width:
+
+        scale = max_detect_width / float(
+            original_w
+        )
+
+        resized_w = max_detect_width
+        resized_h = int(
+            original_h * scale
+        )
+
+        detection_image = cv2.resize(
+            panorama,
+            (
+                resized_w,
+                resized_h
+            ),
+            interpolation=cv2.INTER_AREA
+        )
+
+        scale_x = original_w / float(
+            resized_w
+        )
+
+        scale_y = original_h / float(
+            resized_h
+        )
+
+    # Optional debug save
+    cv2.imwrite(
+        "debug_panorama.jpg",
+        detection_image
+    )
+
+    try:
+        model = YOLO(
+            model_name
+        )
 
     except Exception as exc:
-        return {"error": str(exc)}
+        return {
+            "error": (
+                f"Failed to load YOLO model: {str(exc)}"
+            )
+        }
+
+    try:
+        yolo_results = model(
+            detection_image,
+            conf=confidence_threshold,
+            verbose=False
+        )
+
+    except Exception as exc:
+        return {
+            "error": (
+                f"YOLO inference failed: {str(exc)}"
+            )
+        }
+
+    predictions = []
+
+    for result in yolo_results:
+
+        if result.boxes is None:
+            continue
+
+        for box in result.boxes:
+
+            cls_id = int(
+                box.cls[0]
+            )
+
+            class_name = model.names[
+                cls_id
+            ]
+
+            confidence = float(
+                box.conf[0]
+            )
+
+            x1, y1, x2, y2 = map(
+                int,
+                box.xyxy[0]
+            )
+
+            # Scale back
+            x1 = int(x1 * scale_x)
+            x2 = int(x2 * scale_x)
+            y1 = int(y1 * scale_y)
+            y2 = int(y2 * scale_y)
+
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(original_w, x2)
+            y2 = min(original_h, y2)
+
+            w = x2 - x1
+            h = y2 - y1
+
+            if w < 2 or h < 2:
+                continue
+
+            crop = panorama[
+                y1:y2,
+                x1:x2
+            ]
+
+            if crop.size == 0:
+                continue
+
+            predictions.append({
+                "label": class_name,
+                "confidence": confidence,
+                "crop": crop,
+                "bbox": (
+                    x1,
+                    y1,
+                    w,
+                    h
+                ),
+            })
+
+    predictions.sort(
+        key=lambda p: p["confidence"],
+        reverse=True
+    )
+
+    print(
+        f"[Pipeline] YOLO detections: {len(predictions)}"
+    )
+
+    return {
+        "predictions": predictions
+    }
 
 
-def run_pipeline(images: List[np.ndarray], settings: Dict) -> Dict:
+# =====================================================
+# MAIN PIPELINE
+# =====================================================
+
+def run_pipeline(
+    images: List[np.ndarray],
+    settings: Dict
+) -> Dict:
+
     if not images:
         return {}
 
     results = {}
 
-    # ── Step 1: Preprocessing ──
-    if settings.get("run_preprocessing", False):
-        print("[Pipeline] Running preprocessing...")
-        results["preprocessing"] = run_preprocessing(images[0], settings)
-        print("[Pipeline] Preprocessing done.")
+    # ── Step 1 ──
+    if settings.get(
+        "run_preprocessing",
+        False
+    ):
 
-    # ── Step 2: Pyramids ──
-    if settings.get("run_pyramids", False):
-        print("[Pipeline] Running pyramids...")
-        results["pyramids"] = run_pyramids(images[0], settings)
-        print("[Pipeline] Pyramids done.")
+        print(
+            "[Pipeline] Running preprocessing..."
+        )
 
-    # ── Step 3: Feature Detection & Matching (SIFT + Harris) ──
-    if settings.get("run_feature_detection", False):
+        results["preprocessing"] = run_preprocessing(
+            images[0],
+            settings
+        )
+
+        print(
+            "[Pipeline] Preprocessing done."
+        )
+
+    # ── Step 2 ──
+    if settings.get(
+        "run_pyramids",
+        False
+    ):
+
+        print(
+            "[Pipeline] Running pyramids..."
+        )
+
+        results["pyramids"] = run_pyramids(
+            images[0],
+            settings
+        )
+
+        print(
+            "[Pipeline] Pyramids done."
+        )
+
+    # ── Step 3 ──
+    if settings.get(
+        "run_feature_detection",
+        False
+    ):
+
         if len(images) < 2:
-            print("[Pipeline] Need at least 2 images for feature detection. Skipping.")
-        else:
-            print("[Pipeline] Running feature detection and matching...")
-            results["feature_detection"] = run_feature_detection(images, settings)
-            print("[Pipeline] Feature detection done.")
 
-    # ── Step 4: Stitching ──
-    if settings.get("run_stitching", False):
-        if "feature_detection" not in results:
-            print("[Pipeline] Stitching requires feature detection. Skipping.")
-        else:
-            print("[Pipeline] Running stitching...")
-            results["stitching"] = run_stitching(images, results["feature_detection"])
-            print("[Pipeline] Stitching done.")
-
-    # ── Step 5: Segmentation ──
-    if settings.get("run_segmentation", False):
-        if "stitching" not in results:
-            print("[Pipeline] Segmentation requires stitching. Skipping.")
-        else:
-            print("[Pipeline] Running segmentation...")
-            results["segmentation"] = run_segmentation(
-                results["stitching"]["panorama"], settings
+            print(
+                "[Pipeline] Need at least 2 images for feature detection."
             )
-            print("[Pipeline] Segmentation done.")
-
-    # ── Step 6: Classification ──
-    """
-    if settings.get("run_classification", False):
-
-        if "stitching" not in results:
-
-            print("[Pipeline] Classification requires stitching.")
 
         else:
 
-            print("[Pipeline] Running classification...")
+            print(
+                "[Pipeline] Running feature detection and matching..."
+            )
 
-            classification_results = run_classification(
+            results["feature_detection"] = run_feature_detection(
+                images,
+                settings
+            )
+
+            print(
+                "[Pipeline] Feature detection done."
+            )
+
+    # ── Step 4 ──
+    if settings.get(
+        "run_stitching",
+        False
+    ):
+
+        if "feature_detection" not in results:
+
+            print(
+                "[Pipeline] Stitching requires feature detection."
+            )
+
+        else:
+
+            print(
+                "[Pipeline] Running stitching..."
+            )
+
+            results["stitching"] = run_stitching(
+                images,
+                results["feature_detection"]
+            )
+
+            print(
+                "[Pipeline] Stitching done."
+            )
+
+    # ── Step 5 ──
+    if settings.get(
+        "run_segmentation",
+        False
+    ):
+
+        if "stitching" not in results:
+
+            print(
+                "[Pipeline] Segmentation requires stitching."
+            )
+
+        else:
+
+            print(
+                "[Pipeline] Running segmentation..."
+            )
+
+            results["segmentation"] = run_segmentation(
                 results["stitching"]["panorama"],
                 settings
             )
 
-            results["classification"] = classification_results
+            print(
+                "[Pipeline] Segmentation done."
+            )
 
-            print("[Pipeline] Classification done.")
-"""
-    if settings.get("run_classification", False):
+    # ── Step 6 ──
+    if settings.get(
+        "run_classification",
+        False
+    ):
+
         panorama = None
+
         if "stitching" in results:
-            panorama = results["stitching"]["panorama"]
+
+            panorama = results["stitching"][
+                "panorama"
+            ]
+
         elif images:
+
             panorama = images[0]
 
         if panorama is not None:
-            print("[Pipeline] Running classification...")
-            results["classification"] = run_classification(panorama, settings)
-            print("[Pipeline] Classification done.")
+
+            print(
+                "[Pipeline] Running classification..."
+            )
+
+            results["classification"] = run_classification(
+                panorama,
+                settings
+            )
+
+            print(
+                "[Pipeline] Classification done."
+            )
 
     return results
-
-

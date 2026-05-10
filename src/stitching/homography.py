@@ -1,82 +1,138 @@
-"""
-Homography estimation module for the Smart Panorama & Object Recognition pipeline.
-
-Computes a robust 3x3 Homography transformation matrix from raw keypoint matches 
-using the RANSAC algorithm. Includes geometric sanity checks to prevent degenerate warps.
-"""
-
 import logging
 from typing import List, Tuple
+
 import cv2
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Constants for safety checks
-_HOMOGRAPHY_SAFE_MIN_POINTS: int = 10
-_DET_NEAR_ZERO_THRESH: float = 1e-3
+# Minimum safe number of matches
+_MIN_MATCHES = 12
+
+# Geometric thresholds
+_MAX_SCALE = 4.0
+_MAX_PERSPECTIVE = 0.002
+_MIN_DET = 1e-3
+_MAX_DET = 4.0
+
 
 def calculate_homography(
     kp1: List[cv2.KeyPoint],
     kp2: List[cv2.KeyPoint],
     matches: List[cv2.DMatch],
-    ransac_thresh: float = 5.0,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Compute a 3x3 Homography matrix from raw keypoint matches using RANSAC.
-    """
-    if not matches:
-        raise ValueError("Cannot compute homography: the 'matches' list is empty.")
+    ransac_thresh: float = 3.0,
+) -> Tuple[np.ndarray, np.ndarray, List[cv2.DMatch]]:
 
-    n_matches: int = len(matches)
-    if n_matches < _HOMOGRAPHY_SAFE_MIN_POINTS:
+    if matches is None or len(matches) < _MIN_MATCHES:
         raise ValueError(
-            f"Insufficient matches. Got {n_matches}, require at least {_HOMOGRAPHY_SAFE_MIN_POINTS} "
-            f"for a stable matrix."
+            f"Need at least {_MIN_MATCHES} matches. "
+            f"Got {0 if matches is None else len(matches)}."
         )
 
-    # Extract matched (x, y) pixel coordinates
-    src_pts: np.ndarray = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-    dst_pts: np.ndarray = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+    # Extract point coordinates
+    src_pts = np.float32(
+        [kp1[m.queryIdx].pt for m in matches]
+    ).reshape(-1, 1, 2)
 
-    # Compute the homography via RANSAC
-    H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, ransac_thresh)
+    dst_pts = np.float32(
+        [kp2[m.trainIdx].pt for m in matches]
+    ).reshape(-1, 1, 2)
+
+    # Compute homography using RANSAC
+    H, mask = cv2.findHomography(
+        src_pts,
+        dst_pts,
+        cv2.RANSAC,
+        ransac_thresh
+    )
 
     if H is None:
-        raise RuntimeError(
-            "cv2.findHomography returned None. The scene may be degenerate "
-            "(e.g., the camera did not move or images do not overlap)."
-        )
+        raise RuntimeError("Failed to compute homography.")
 
-    # Defensive fallback if mask is None but H is valid
     if mask is None:
-        mask = np.ones((n_matches, 1), dtype=np.uint8)
+        mask = np.ones((len(matches), 1), dtype=np.uint8)
 
-    n_inliers: int = int(mask.sum())
-    logger.info(f"Homography estimated — inliers: {n_inliers} / {n_matches} ({(100.0 * n_inliers / n_matches):.1f}%)")
+    # Keep only inlier matches
+    inlier_matches = [
+        matches[i]
+        for i in range(len(matches))
+        if mask[i]
+    ]
 
-    return H, mask
+    inliers = int(mask.sum())
+
+    logger.info(
+        f"Homography estimated. "
+        f"Inliers: {inliers}/{len(matches)}"
+    )
+
+    print("\n========== HOMOGRAPHY ==========")
+    print(H)
+
+    print("\nPerspective Terms:")
+    print("H[2,0] =", H[2, 0])
+    print("H[2,1] =", H[2, 1])
+
+    sx = np.linalg.norm(H[0, :2])
+    sy = np.linalg.norm(H[1, :2])
+
+    print("\nScale:")
+    print("Scale X =", sx)
+    print("Scale Y =", sy)
+
+    print("================================\n")
+
+    return H, mask, inlier_matches
+
 
 def is_homography_valid(H: np.ndarray) -> bool:
-    """
-    Perform a geometric sanity check on a 3x3 Homography matrix to prevent 
-    reflections or near-singular collapses.
-    """
-    if H is None or not isinstance(H, np.ndarray) or H.shape != (3, 3):
+
+    if H is None:
         return False
 
-    # Check determinant of the top-left 2x2 sub-matrix (rotation + scale)
-    top_left_2x2: np.ndarray = H[:2, :2]
-    det: float = float(np.linalg.det(top_left_2x2))
+    if not isinstance(H, np.ndarray):
+        return False
 
-    # Negative determinant -> reflection (inside-out)
+    if H.shape != (3, 3):
+        return False
+
+    # Rotation + Scale block
+    top_left = H[:2, :2]
+
+    det = float(np.linalg.det(top_left))
+
+    # Reflection or collapse
     if det <= 0:
-        logger.warning(f"Homography rejected: determinant is {det:.6f} (reflection detected).")
+        logger.warning(f"Rejected: negative determinant ({det:.6f})")
         return False
 
-    # Near-zero determinant -> singular/degenerate collapse
-    if det < _DET_NEAR_ZERO_THRESH:
-        logger.warning(f"Homography rejected: determinant is {det:.6f} (near-singular collapse).")
+    if det < _MIN_DET:
+        logger.warning(f"Rejected: near-singular determinant ({det:.6f})")
+        return False
+
+    if det > _MAX_DET:
+        logger.warning(f"Rejected: excessive scaling determinant ({det:.6f})")
+        return False
+
+    # Perspective sanity
+    p1 = abs(float(H[2, 0]))
+    p2 = abs(float(H[2, 1]))
+
+    if p1 > _MAX_PERSPECTIVE or p2 > _MAX_PERSPECTIVE:
+        logger.warning(
+            f"Rejected: excessive perspective "
+            f"({p1:.6f}, {p2:.6f})"
+        )
+        return False
+
+    # Scale sanity
+    sx = np.linalg.norm(H[0, :2])
+    sy = np.linalg.norm(H[1, :2])
+
+    if sx > _MAX_SCALE or sy > _MAX_SCALE:
+        logger.warning(
+            f"Rejected: excessive scale ({sx:.2f}, {sy:.2f})"
+        )
         return False
 
     return True
